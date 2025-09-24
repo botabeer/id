@@ -1,26 +1,28 @@
 from flask import Flask, request, abort
-from dotenv import load_dotenv
 import os
-
+from dotenv import load_dotenv
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage
 
-# تحميل المتغيرات من ملف .env
+# تحميل المتغيرات من .env
 load_dotenv()
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
+LINE_CHANNEL_SECRET = os.getenv("LINE_CHANNEL_SECRET")
 
 app = Flask(__name__)
-
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv("aErk1lTQiebIf/P1d8JQllkU1eebylaSAKQZTkYW3d50WeLncmTlIMyFX9rvttNg347TH6SsLwKSGZTKIxv+JmIFPeye/tK2us6/npBfeYkdkti5YhNz/wJzYszW12IikIDfi5NT1oMeXBRmAL8C0wdB04t89/1O/w1cDnyilFU=")
-LINE_CHANNEL_SECRET = os.getenv("1841e7af13a02de5400ade57c3fb9bc1")
 
 line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
-# قائمة الحظر
-blacklist = set()
+# جلب ID البوت نفسه
+try:
+    bot_info = line_bot_api.get_bot_info()
+    BOT_ID = bot_info.user_id
+except Exception:
+    BOT_ID = "غير متاح (تأكد من التوكن)"
 
-# استقبال Webhook
+
 @app.route("/callback", methods=["POST"])
 def callback():
     signature = request.headers["X-Line-Signature"]
@@ -36,104 +38,80 @@ def callback():
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
+    user_id = event.source.user_id
+    group_id = None
+
+    if event.source.type == "group":
+        group_id = event.source.group_id
+    elif event.source.type == "room":
+        group_id = event.source.room_id
+
     text = event.message.text.strip()
 
-    # أمر id
-    if text == "id":
-        user_id = event.source.user_id
-        reply = f"🆔 ID الخاص بك:\n{user_id}"
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    # ----- أوامر IDs -----
+    if text == "معرفي":
+        reply_text = f"👤 User ID: {user_id}"
 
-    # أمر تحقق الأدمن
-    elif text == "تحقق الأدمن":
+    elif text == "معرف_البوت":
+        reply_text = f"🤖 Bot ID: {BOT_ID}"
+
+    elif text == "معرف_القروب":
+        if group_id:
+            reply_text = f"👥 Group/Room ID: {group_id}"
+        else:
+            reply_text = "❌ الأمر يعمل فقط داخل قروب أو روم"
+
+    elif text == "اعضاء" and group_id:
         try:
-            group_id = event.source.group_id
-            bot_profile = line_bot_api.get_group_member_profile(group_id, event.source.user_id)
-
-            if hasattr(bot_profile, "role") and bot_profile.role == "admin":
-                reply = "✅ البوت أدمن في هذا القروب"
+            if event.source.type == "group":
+                member_ids = line_bot_api.get_group_member_ids(group_id)
             else:
-                reply = "❌ البوت ليس أدمن في هذا القروب"
-        except Exception as e:
-            reply = f"⚠️ خطأ أثناء التحقق: {e}"
+                member_ids = line_bot_api.get_room_member_ids(group_id)
 
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+            members_text = []
+            for uid in member_ids:
+                try:
+                    profile = line_bot_api.get_group_member_profile(group_id, uid)
+                    members_text.append(f"{profile.display_name} — {uid}")
+                except:
+                    members_text.append(uid)
 
-    # أمر طرد بالمنشن
-    elif text.startswith("طرد @"):
-        try:
-            group_id = event.source.group_id
-            name = text.replace("طرد @", "").strip()
-
-            members = line_bot_api.get_group_member_ids(group_id)
-            found = False
-            for uid in members:
-                profile = line_bot_api.get_group_member_profile(group_id, uid)
-                if profile.display_name == name:
-                    line_bot_api.kick_group_member(group_id, uid)
-                    reply = f"🚫 تم طرد {name}"
-                    found = True
-                    break
-
-            if not found:
-                reply = f"❌ العضو @{name} غير موجود"
+            reply_text = "👥 أعضاء القروب:\n" + "\n".join(members_text)
 
         except Exception as e:
-            reply = f"⚠️ فشل الطرد: {e}"
+            reply_text = f"⚠️ خطأ أثناء جلب الأعضاء: {str(e)}"
 
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    elif text == "مساعدة":
+        reply_text = (
+            "📌 أوامر البوت الخاصة بالمعرفات:\n\n"
+            "• id → يظهر User ID + Bot ID + Group/Room ID\n"
+            "• معرفي → يظهر معرفك الشخصي\n"
+            "• معرف_البوت → يظهر معرف البوت\n"
+            "• معرف_القروب → يظهر معرف القروب/الروم\n"
+            "• اعضاء → يظهر قائمة بأعضاء القروب (مع الاسم + ID)\n"
+            "• أي رسالة أخرى → يظهر كل المعرفات معاً"
+        )
 
-    # أمر حظر بالمنشن
-    elif text.startswith("حظر @"):
-        try:
-            group_id = event.source.group_id
-            name = text.replace("حظر @", "").strip()
+    elif text == "id":
+        if group_id:
+            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n👥 Group/Room ID: {group_id}"
+        else:
+            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n(خاص، لا يوجد Group ID)"
 
-            members = line_bot_api.get_group_member_ids(group_id)
-            found = False
-            for uid in members:
-                profile = line_bot_api.get_group_member_profile(group_id, uid)
-                if profile.display_name == name:
-                    blacklist.add(uid)
-                    reply = f"⛔ تم حظر {name}"
-                    found = True
-                    break
+    else:
+        # الرد الافتراضي: كل المعرفات
+        if group_id:
+            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n👥 Group/Room ID: {group_id}"
+        else:
+            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n(خاص، لا يوجد Group ID)"
 
-            if not found:
-                reply = f"❌ العضو @{name} غير موجود"
-
-        except Exception as e:
-            reply = f"⚠️ فشل الحظر: {e}"
-
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
-
-    # أمر رفع الحظر بالمنشن
-    elif text.startswith("رفع الحظر @"):
-        try:
-            group_id = event.source.group_id
-            name = text.replace("رفع الحظر @", "").strip()
-
-            members = line_bot_api.get_group_member_ids(group_id)
-            found = False
-            for uid in members:
-                profile = line_bot_api.get_group_member_profile(group_id, uid)
-                if profile.display_name == name:
-                    if uid in blacklist:
-                        blacklist.remove(uid)
-                        reply = f"✅ تم رفع الحظر عن {name}"
-                    else:
-                        reply = f"ℹ️ {name} غير موجود في قائمة الحظر"
-                    found = True
-                    break
-
-            if not found:
-                reply = f"❌ العضو @{name} غير موجود"
-
-        except Exception as e:
-            reply = f"⚠️ فشل رفع الحظر: {e}"
-
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    # إرسال الرد
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=reply_text)
+    )
 
 
 if __name__ == "__main__":
-    app.run(port=8000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
