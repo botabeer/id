@@ -46,70 +46,65 @@ def handle_message(event):
     elif event.source.type == "room":
         group_id = event.source.room_id
 
-    text = event.message.text.strip()
+    # نخلي الأوامر كلها تتحول سمول
+    text = event.message.text.strip().lower()
+
+    reply_text = None  # مبدئياً لا يوجد رد
 
     # ----- أوامر IDs -----
-    if text == "معرفي":
-        reply_text = f"👤 User ID: {user_id}"
+    if text in ["id", "معرفي"]:
+        reply_text = f"🆔 USER ID: {user_id.upper()}"
 
-    elif text == "معرف_البوت":
-        reply_text = f"🤖 Bot ID: {BOT_ID}"
-
-    elif text == "معرف_القروب":
+    elif text in ["idg", "معرف_القروب"]:
         if group_id:
-            reply_text = f"👥 Group/Room ID: {group_id}"
+            reply_text = f"🆔 GROUP/ROOM ID: {group_id.upper()}"
         else:
-            reply_text = "❌ الأمر يعمل فقط داخل قروب أو روم"
+            reply_text = "❌ هَذَا الأَمْر يَعْمَل فَقَط دَاخِل قُرُوب أَو رُوم"
 
-    elif text == "اعضاء" and group_id:
-        try:
-            if event.source.type == "group":
-                member_ids = line_bot_api.get_group_member_ids(group_id)
-            else:
-                member_ids = line_bot_api.get_room_member_ids(group_id)
+    elif text in ["idall", "الكل"]:
+        if group_id:
+            try:
+                if event.source.type == "group":
+                    member_ids = line_bot_api.get_group_member_ids(group_id)
+                else:
+                    member_ids = line_bot_api.get_room_member_ids(group_id)
 
-            members_text = []
-            for uid in member_ids:
-                try:
-                    profile = line_bot_api.get_group_member_profile(group_id, uid)
-                    members_text.append(f"{profile.display_name} — {uid}")
-                except:
-                    members_text.append(uid)
+                members_text = []
+                for uid in member_ids:
+                    try:
+                        if event.source.type == "group":
+                            profile = line_bot_api.get_group_member_profile(group_id, uid)
+                        else:
+                            profile = line_bot_api.get_room_member_profile(group_id, uid)
+                        members_text.append(f"🆔 {profile.display_name.upper()} — {uid.upper()}")
+                    except:
+                        members_text.append(f"🆔 {uid.upper()}")
 
-            reply_text = "👥 أعضاء القروب:\n" + "\n".join(members_text)
+                reply_text = (
+                    f"🆔 GROUP/ROOM ID: {group_id.upper()}\n"
+                    f"🆔 BOT ID: {BOT_ID.upper()}\n\n"
+                    "🆔 MEMBERS:\n" + "\n".join(members_text)
+                )
+            except Exception as e:
+                reply_text = f"⚠️ خَطَأ أَثْنَاء جَلْب الأَعْضَاء: {str(e).upper()}"
+        else:
+            reply_text = "❌ هَذَا الأَمْر يَعْمَل فَقَط دَاخِل قُرُوب أَو رُوم"
 
-        except Exception as e:
-            reply_text = f"⚠️ خطأ أثناء جلب الأعضاء: {str(e)}"
-
-    elif text == "مساعدة":
+    elif text in ["help", "مساعدة"]:
         reply_text = (
-            "📌 أوامر البوت الخاصة بالمعرفات:\n\n"
-            "• id → يظهر User ID + Bot ID + Group/Room ID\n"
-            "• معرفي → يظهر معرفك الشخصي\n"
-            "• معرف_البوت → يظهر معرف البوت\n"
-            "• معرف_القروب → يظهر معرف القروب/الروم\n"
-            "• اعضاء → يظهر قائمة بأعضاء القروب (مع الاسم + ID)\n"
-            "• أي رسالة أخرى → يظهر كل المعرفات معاً"
+            "📌 أَوَامِر البُوت:\n\n"
+            "• ID / مَعْرِفِي → يُظْهِر مَعْرِفَك الشَّخْصِي (🆔 USER ID)\n"
+            "• IDG / مَعْرِف_القُرُوب → يُظْهِر مَعْرِف القُرُوب/الرُوم (🆔 GROUP/ROOM ID)\n"
+            "• IDALL / الكُل → يُظْهِر مَعْرِف القُرُوب + مَعْرِف البُوت + جَمِيع أَعْضَاء القُرُوب مَع 🆔\n"
+            "• HELP / مُسَاعَدَة → عَرْض قَائِمَة الأَوَامِر"
         )
 
-    elif text == "id":
-        if group_id:
-            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n👥 Group/Room ID: {group_id}"
-        else:
-            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n(خاص، لا يوجد Group ID)"
-
-    else:
-        # الرد الافتراضي: كل المعرفات
-        if group_id:
-            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n👥 Group/Room ID: {group_id}"
-        else:
-            reply_text = f"👤 User ID: {user_id}\n🤖 Bot ID: {BOT_ID}\n(خاص، لا يوجد Group ID)"
-
-    # إرسال الرد
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=reply_text)
-    )
+    # الرد فقط إذا فيه أمر مطلوب
+    if reply_text:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply_text)
+        )
 
 
 if __name__ == "__main__":
