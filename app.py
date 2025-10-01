@@ -17,7 +17,7 @@ try:
     bot_info = line_bot_api.get_bot_info()
     BOT_ID = bot_info.user_id
 except Exception:
-    BOT_ID = "غير متاح (تأكد من التوكن)"
+    BOT_ID = "غير متاح (تاكد من التوكن)"
 
 @app.route("/callback", methods=["POST"])
 def callback():
@@ -46,7 +46,7 @@ def handle_message(event):
         if group_id:
             reply_text = f"🆔 GROUP/ROOM ID: {group_id.upper()}"
         else:
-            reply_text = "❌ هَذَا الأَمْر يَعْمَل فَقَط دَاخِل قُرُوب أَو رُوم"
+            reply_text = "❌ هذا الامر يعمل فقط داخل قروب او روم"
     elif text in ["idall", "الكل"]:
         if group_id:
             try:
@@ -70,16 +70,16 @@ def handle_message(event):
                     "🆔 MEMBERS:\n" + "\n".join(members_text)
                 )
             except Exception as e:
-                reply_text = f"⚠️ خَطَأ أَثْنَاء جَلْب الأَعْضَاء: {str(e).upper()}"
+                reply_text = f"⚠️ خطأ اثناء جلب الاعضاء: {str(e).upper()}"
         else:
-            reply_text = "❌ هَذَا الأَمْر يَعْمَل فَقَط دَاخِل قُرُوب أَو رُوم"
+            reply_text = "❌ هذا الامر يعمل فقط داخل قروب او روم"
     elif text in ["help", "مساعدة"]:
         reply_text = (
-            "📌 أَوَامِر البُوت:\n\n"
-            "• ID / مَعْرِفِي → يُظْهِر مَعْرِفَك الشَّخْصِي (🆔 USER ID)\n"
-            "• IDG / مَعْرِف_القُرُوب → يُظْهِر مَعْرِف القُرُوب/الرُوم (🆔 GROUP/ROOM ID)\n"
-            "• IDALL / الكُل → يُظْهِر مَعْرِف القُرُوب + مَعْرِف البُوت + جَمِيع أَعْضَاء القُرُوب مَع 🆔\n"
-            "• HELP / مُسَاعَدَة → عَرْض قَائِمَة الأَوَامِر"
+            "📌 اوامر البوت:\n"
+            "1️⃣ ID → معرفك\n"
+            "2️⃣ IDG → معرف القروب/الروم\n"
+            "3️⃣ IDALL → جميع المعرفات\n"
+            "4️⃣ HELP → عرض الاوامر"
         )
 
     if reply_text:
